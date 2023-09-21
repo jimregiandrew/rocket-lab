@@ -9,6 +9,9 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 
+using std::cout;
+using std::string;
+
 // Define the multicast address and port
 const char* MULTICAST_ADDRESS = "224.3.11.15";
 const int MULTICAST_PORT = 31115;
@@ -120,6 +123,8 @@ int main(int argc, char* argv[]) {
         perror("Error creating device socket");
         return 1;
     }
+    int max_fd = std::max(sockfd, dev_sockfd);
+    cout << "sockfd=" << sockfd << ", dev_sockfd=" << dev_sockfd << ", max_fd=" << max_fd << ", listenPort=" << listenPort << std::endl;
 
     fd_set readfds;
     struct timeval timeout;
@@ -131,11 +136,12 @@ int main(int argc, char* argv[]) {
     while (true) {
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
+        FD_SET(dev_sockfd, &readfds);
 
         timeout.tv_sec = 1; // Wait for up to 1 second
         timeout.tv_usec = 0;
 
-        int selectResult = select(sockfd + 1, &readfds, nullptr, nullptr, &timeout);
+        int selectResult = select(max_fd + 1, &readfds, nullptr, nullptr, &timeout);
 
         if (selectResult < 0) {
             perror("Error in select");

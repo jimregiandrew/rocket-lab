@@ -137,9 +137,12 @@ class MainWindow(QMainWindow):
         sd_widget = QPushButton("Select device")
         sd_widget.pressed.connect(self.select_device)
         layout.addWidget(sd_widget)
-        dtd_widget = QPushButton("Define test duration")
-        dtd_widget.pressed.connect(self.define_test_duration)
-        layout.addWidget(dtd_widget)
+        start_test_widget = QPushButton("Start test")
+        start_test_widget.pressed.connect(self.start_test)
+        layout.addWidget(start_test_widget)
+        self.dtd_widget = QLineEdit()
+        #self.dtd_widget.pressed.connect(self.define_test_duration)
+        layout.addWidget(self.dtd_widget)        
         exit_widget = QPushButton("Exit")
         exit_widget.pressed.connect(self.exit_program)
         layout.addWidget(exit_widget)
@@ -218,7 +221,10 @@ class MainWindow(QMainWindow):
         print("Selecting device")
 
     def define_test_duration(self):
-        print("Define test duration")
+        print(self.dtd_widget.text())
+
+    def start_test(self):
+        print("starting test, duration=", self.dtd_widget.text())
         UDP_IP = '224.3.11.15'
         UDP_PORT = 31115
         MESSAGE = "ID;"
