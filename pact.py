@@ -8,10 +8,23 @@ import traceback, sys
 import random
 import socket
 import struct
+import select
 
 # https://stackoverflow.com/questions/27893804/udp-client-server-socket-in-python
 # https://stackoverflow.com/questions/603852/how-do-you-udp-multicast-in-python
 # https://stackoverflow.com/questions/10692956/what-does-it-mean-to-bind-a-multicast-udp-socket
+
+#global program_finished
+program_finished = False
+
+def setup_multicast_socket(MCAST_GRP, MCAST_PORT):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    #server_socket.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(MCAST_GRP))
+    sock.bind(('', 31115))
+    return sock
 
 class SocketWorker(QRunnable):
 
@@ -20,21 +33,21 @@ class SocketWorker(QRunnable):
         MCAST_GRP = '224.3.11.15'
         MCAST_PORT = 31115
         IS_ALL_GROUPS = True
-
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        #server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
-        self.server_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        #server_socket.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(MCAST_GRP))
-        self.server_socket.bind(('', 31115))
+        
+        self.server_socket = setup_multicast_socket(MCAST_GRP, MCAST_PORT)
 
     @pyqtSlot()
     def run(self):
-        while True:
-            message, address = self.server_socket.recvfrom(1024)
-            message = message.upper()
-            print("Got message " + message.decode())
-            self.server_socket.sendto(message+bytes("-reply", 'utf-8'), address)
+        while not program_finished:
+            # print("socket thread: program_finished=",program_finished)
+            timeout = 1.0
+            r, _, _ = select.select([self.server_socket], [], [], timeout)
+            if r:
+                message, address = self.server_socket.recvfrom(1024)
+                message = message.decode().upper().strip()
+                print("Got message " + message + " from", address)
+                self.server_socket.sendto(bytes(message,'utf-8')+bytes("-reply", 'utf-8'), address)
+        print("Finished socket thread")
 
 class WorkerSignals(QObject):
     '''
@@ -118,11 +131,19 @@ class MainWindow(QMainWindow):
         
         # GUI
         layout = QVBoxLayout()
-        self.l = QLabel("Start")
-        b = QPushButton("DANGER!")
-        b.pressed.connect(self.oh_no)
-        layout.addWidget(self.l)
-        layout.addWidget(b)
+        dd_widget = QPushButton("Discover devices")
+        dd_widget.pressed.connect(self.discover_devices)
+        layout.addWidget(dd_widget)
+        sd_widget = QPushButton("Select device")
+        sd_widget.pressed.connect(self.select_device)
+        layout.addWidget(sd_widget)
+        dtd_widget = QPushButton("Define test duration")
+        dtd_widget.pressed.connect(self.define_test_duration)
+        layout.addWidget(dtd_widget)
+        exit_widget = QPushButton("Exit")
+        exit_widget.pressed.connect(self.exit_program)
+        layout.addWidget(exit_widget)
+
         w = QWidget()
         w.setLayout(layout)
         self.setCentralWidget(w)
@@ -139,9 +160,9 @@ class MainWindow(QMainWindow):
         self.timer.start()
 
         # Socket thread
-        sw = SocketWorker() # create Worker object that calls self.execute_this_fn (worker.fn)
+        #sw = SocketWorker() # create Worker object that calls self.execute_this_fn (worker.fn)
         # Start sw (thread)
-        self.threadpool.start(sw)
+        #self.threadpool.start(sw)
 
     def progress_fn(self, n):
         print("%d%% done" % n)
@@ -161,23 +182,78 @@ class MainWindow(QMainWindow):
     def thread_complete(self):
         print("THREAD COMPLETE!")
 
-    def oh_no(self):
-        # Pass the function to execute
-        worker = Worker(self.execute_this_fn) # create Worker object that calls self.execute_this_fn (worker.fn)
-        worker.signals.result.connect(self.print_output)
-        worker.signals.finished.connect(self.thread_complete)
-        worker.signals.progress.connect(self.progress_fn)
+    def discover_devices(self):
+        UDP_IP = '224.3.11.15'
+        UDP_PORT = 31115
+        MESSAGE = "ID;"
+
+        print("UDP target IP:", UDP_IP)
+        print("UDP target port:", UDP_PORT)
+        print("message:", MESSAGE)
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+        sock.settimeout(2.0)
+        sock.sendto(bytes(MESSAGE, "utf-8"), (UDP_IP, UDP_PORT))        # Pass the function to execute
+        # Look for responses from all recipients
+        while True:
+            print("waiting to receive")
+            try:
+                data, server = sock.recvfrom(1024)
+            except socket.timeout:
+                print("timed out, no more responses")
+                break
+            else:
+                print("received ",data, " from ", server)
+
+        
+        #worker = Worker(self.execute_this_fn) # create Worker object that calls self.execute_this_fn (worker.fn)
+        #worker.signals.result.connect(self.print_output)
+        #worker.signals.finished.connect(self.thread_complete)
+        #Worker.signals.progress.connect(self.progress_fn)
 
         # Start worker (thread)
-        self.threadpool.start(worker)
+        #self.threadpool.start(worker)
 
+    def select_device(self):
+        print("Selecting device")
+
+    def define_test_duration(self):
+        print("Define test duration")
+        UDP_IP = '224.3.11.15'
+        UDP_PORT = 31115
+        MESSAGE = "ID;"
+
+        print("UDP target IP:", UDP_IP)
+        print("UDP target port:", UDP_PORT)
+        print("message:", MESSAGE)
+
+        sock = setup_multicast_socket(UDP_IP, UDP_PORT)
+        sock.settimeout(3.0)
+        sock.sendto(bytes("TEST;CMD=START;DURATION=2;RATE=1000", "utf-8"), (UDP_IP, UDP_PORT))
+        # Look for responses from all recipients
+        while True:
+            print("2. waiting to receive")
+            try:
+                data, server = sock.recvfrom(1024)
+            except socket.timeout:
+                print("2. timed out, no more responses")
+                break
+            else:
+                print("2. received ",data, " from ", server)
+
+
+    def exit_program(self):
+        global program_finished
+        program_finished = True
+        print("program_finished=",program_finished)
 
     def recurring_timer(self):
         self.counter +=1
-        self.l.setText("Counter: %d" % self.counter)
+        #self.l.setText("Counter: %d" % self.counter)
 
 
 app = QApplication([])
 window = MainWindow()
+app.aboutToQuit.connect(window.exit_program)
 app.exec_()
 
