@@ -16,38 +16,44 @@ import select
 
 #global program_finished
 program_finished = False
+MCAST_GROUP = '224.3.11.15'
+MCAST_PORT = 31115
 
-def setup_multicast_socket(MCAST_GRP, MCAST_PORT):
+def setup_multicast_socket(mcast_group, mcast_port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
+    mreq = struct.pack("4sl", socket.inet_aton(mcast_group), socket.INADDR_ANY)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-    #server_socket.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(MCAST_GRP))
-    sock.bind(('', 31115))
+    #server_socket.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(mcast_group))
+    sock.bind(('', mcast_port))
     return sock
+
+def raise_error(error_str):
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Critical)
+    msg.setText("Error")
+    msg.setInformativeText(error_str)
+    msg.setWindowTitle("Error")
+    msg.exec_()
 
 class SocketWorker(QRunnable):
 
     def __init__(self, *args, **kwargs):
         super(SocketWorker, self).__init__()
-        MCAST_GRP = '224.3.11.15'
-        MCAST_PORT = 31115
-        IS_ALL_GROUPS = True
-        
-        self.server_socket = setup_multicast_socket(MCAST_GRP, MCAST_PORT)
+        self.server_socket = setup_multicast_socket(MCAST_GROUP, MCAST_PORT)
 
     @pyqtSlot()
     def run(self):
         while not program_finished:
-            # print("socket thread: program_finished=",program_finished)
+            print("SW: socket thread: program_finished=",program_finished)
             timeout = 1.0
             r, _, _ = select.select([self.server_socket], [], [], timeout)
             if r:
                 message, address = self.server_socket.recvfrom(1024)
                 message = message.decode().upper().strip()
-                print("Got message " + message + " from", address)
+                print("SW: got message " + message + " from", address)
                 self.server_socket.sendto(bytes(message,'utf-8')+bytes("-reply", 'utf-8'), address)
-        print("Finished socket thread")
+        print("SW: Finished socket thread")
 
 class WorkerSignals(QObject):
     '''
@@ -142,10 +148,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(start_test_widget)
         self.dtd_widget = QLineEdit()
         #self.dtd_widget.pressed.connect(self.define_test_duration)
-        layout.addWidget(self.dtd_widget)        
-        exit_widget = QPushButton("Exit")
-        exit_widget.pressed.connect(self.exit_program)
-        layout.addWidget(exit_widget)
+        duration_row = QFormLayout()
+        duration_row.addRow("Duration", self.dtd_widget)
+        layout.addLayout(duration_row)
+        stop_widget = QPushButton("Stop test")
+        stop_widget.pressed.connect(self.stop_test)
+        layout.addWidget(stop_widget)
 
         w = QWidget()
         w.setLayout(layout)
@@ -163,9 +171,9 @@ class MainWindow(QMainWindow):
         self.timer.start()
 
         # Socket thread
-        #sw = SocketWorker() # create Worker object that calls self.execute_this_fn (worker.fn)
+        sw = SocketWorker() # create Worker object that calls self.execute_this_fn (worker.fn)
         # Start sw (thread)
-        #self.threadpool.start(sw)
+        self.threadpool.start(sw)
 
     def progress_fn(self, n):
         print("%d%% done" % n)
@@ -195,7 +203,7 @@ class MainWindow(QMainWindow):
         print("message:", MESSAGE)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-        sock.settimeout(2.0)
+        sock.settimeout(0.01) # Can't be 0
         sock.sendto(bytes(MESSAGE, "utf-8"), (UDP_IP, UDP_PORT))        # Pass the function to execute
         # Look for responses from all recipients
         while True:
@@ -224,18 +232,14 @@ class MainWindow(QMainWindow):
         print(self.dtd_widget.text())
 
     def start_test(self):
+        durstr = self.dtd_widget.text()
+        if (not durstr.isdigit()):
+            raise_error(durstr + " is not an integer. Please enter an integer duration in seconds")
+            return
         print("starting test, duration=", self.dtd_widget.text())
-        UDP_IP = '224.3.11.15'
-        UDP_PORT = 31115
-        MESSAGE = "ID;"
-
-        print("UDP target IP:", UDP_IP)
-        print("UDP target port:", UDP_PORT)
-        print("message:", MESSAGE)
-
-        sock = setup_multicast_socket(UDP_IP, UDP_PORT)
+        sock = setup_multicast_socket(MCAST_GROUP, MCAST_PORT)
         sock.settimeout(3.0)
-        sock.sendto(bytes("TEST;CMD=START;DURATION=2;RATE=1000", "utf-8"), (UDP_IP, UDP_PORT))
+        sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), (MCAST_GROUP, MCAST_PORT))
         # Look for responses from all recipients
         while True:
             print("2. waiting to receive")
@@ -247,6 +251,8 @@ class MainWindow(QMainWindow):
             else:
                 print("2. received ",data, " from ", server)
 
+    def stop_test(self):
+        print("Stop test")
 
     def exit_program(self):
         global program_finished
