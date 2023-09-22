@@ -1,6 +1,8 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 import time
 import traceback, sys
@@ -46,6 +48,33 @@ def parse_key_values(input_str, delim1 = ';', delim2 = '='):
             key, value = key_value
             out_dict[key] = value
     return out_dict
+
+# Matplotlib code from https://www.pythonguis.com/tutorials/plotting-matplotlib/
+from PyQt5 import QtWidgets
+class MplCanvas(FigureCanvas):
+
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+        super(MplCanvas, self).__init__(fig)
+
+class PlotWindow(QtWidgets.QMainWindow):
+
+    def __init__(self, *args, **kwargs):
+        super(PlotWindow, self).__init__(*args, **kwargs)
+        self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
+        self.setCentralWidget(self.canvas)
+        self.show()
+
+    def update_plot(self, ms, mv, ma):
+        self.canvas.axes.cla()  # Clear the canvas.
+        self.canvas.axes.plot(ms, mv, label="mV")
+        self.canvas.axes.plot(ms, ma, label="mA")
+        self.canvas.axes.set_xlabel('milliseconds')
+        self.canvas.axes.set_ylabel('mV or mA')
+        self.canvas.axes.legend()
+        # Trigger the canvas to update and redraw.
+        self.canvas.draw()
 
 class MainWindow(QMainWindow):
 
@@ -95,6 +124,12 @@ class MainWindow(QMainWindow):
                 print("check_socket: timed out, no more responses")
             else:
                 print("check_socket: received ",data, " from ", address)
+                keyvals = parse_key_values(str(data))
+                if ("TIME" in keyvals and "MV" in keyvals and "MA" in keyvals):
+                    self.ms.append(int(keyvals["TIME"]))
+                    self.mv.append(int(keyvals["MV"]))
+                    self.ma.append(int(keyvals["MA"]))
+                    self.plotWindow.update_plot(self.ms, self.mv, self.ma)
 
     def discover_devices(self):
         message = "ID;"
@@ -130,6 +165,11 @@ class MainWindow(QMainWindow):
         if (not devices_idx in range(self.device_list_widget.count())):
             raise_error("Please select device in list below 'Discover devices'. (You may need to press 'Discover devices' button again.)")
             return
+        self.mv = []
+        self.ma = []
+        self.ms = []
+        self.plotWindow = PlotWindow()
+        self.plotWindow.show()
         print("Starting test, device=", self.device_list_widget.currentItem().text(), ", duration=", self.dtd_widget.text())
         self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "iso8859-1"), self.devices[devices_idx])
 
@@ -141,14 +181,10 @@ class MainWindow(QMainWindow):
             return
         self.sock.sendto(bytes("TEST;CMD=STOP;", "iso8859-1"), self.devices[devices_idx])
 
-    def exit_program(self):
+    def exit_program(self): # legacy, used when there was more than one thread
         global PROGRAM_FINISHED
         PROGRAM_FINISHED = True
         print("PROGRAM_FINISHED=",PROGRAM_FINISHED)
-
-    def recurring_timer(self):
-        self.counter +=1
-        #self.l.setText("Counter: %d" % self.counter)
 
 
 app = QApplication([])
