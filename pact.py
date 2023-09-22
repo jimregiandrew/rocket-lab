@@ -171,9 +171,15 @@ class MainWindow(QMainWindow):
         self.timer.start()
 
         # Socket thread
-        sw = SocketWorker() # create Worker object that calls self.execute_this_fn (worker.fn)
+        # sw = SocketWorker() # create Worker object that calls self.execute_this_fn (worker.fn)
         # Start sw (thread)
-        self.threadpool.start(sw)
+        # self.threadpool.start(sw)
+        self.timer=QTimer()
+        self.timer.timeout.connect(self.check_socket)
+        self.timer.start(1000)
+        
+    def check_socket(self):
+        pass
 
     def progress_fn(self, n):
         print("%d%% done" % n)
@@ -194,17 +200,11 @@ class MainWindow(QMainWindow):
         print("THREAD COMPLETE!")
 
     def discover_devices(self):
-        UDP_IP = '224.3.11.15'
-        UDP_PORT = 31115
         MESSAGE = "ID;"
-
-        print("UDP target IP:", UDP_IP)
-        print("UDP target port:", UDP_PORT)
-        print("message:", MESSAGE)
-
+        print("Sening message:", MESSAGE)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
         sock.settimeout(0.01) # Can't be 0
-        sock.sendto(bytes(MESSAGE, "utf-8"), (UDP_IP, UDP_PORT))        # Pass the function to execute
+        sock.sendto(bytes(MESSAGE, "utf-8"), (MCAST_GROUP, MCAST_PORT))        # Pass the function to execute
         # Look for responses from all recipients
         while True:
             print("waiting to receive")
