@@ -49,9 +49,8 @@ class MainWindow(QMainWindow):
         dd_widget = QPushButton("Discover devices")
         dd_widget.pressed.connect(self.discover_devices)
         layout.addWidget(dd_widget)
-        sd_widget = QPushButton("Select device")
-        sd_widget.pressed.connect(self.select_device)
-        layout.addWidget(sd_widget)
+        self.device_list_widget = QListWidget()
+        layout.addWidget(self.device_list_widget)
         self.dtd_widget = QLineEdit()
         #self.dtd_widget.pressed.connect(self.define_test_duration)
         duration_row = QFormLayout()
@@ -74,6 +73,7 @@ class MainWindow(QMainWindow):
         self.timer.start(100)
         
         self.sock = setup_multicast_socket(MCAST_GROUP, MCAST_PORT)
+        self.devices = []
         
     def check_socket(self):
         timeout = 0.01
@@ -90,7 +90,9 @@ class MainWindow(QMainWindow):
         message = "ID;"
         print("Sending message:", message)
         self.sock.settimeout(0.01) # Can't be 0
-        self.sock.sendto(bytes(message, "utf-8"), (MCAST_GROUP, MCAST_PORT))        # Pass the function to execute
+        self.sock.sendto(bytes(message, "utf-8"), (MCAST_GROUP, MCAST_PORT))
+        self.device_list_widget.clear()
+        self.devices.clear()
         # Look for responses from all recipients
         while True:
             print("waiting to receive")
@@ -101,9 +103,8 @@ class MainWindow(QMainWindow):
                 break
             else:
                 print("received ",data, " from ", address)
-
-    def select_device(self):
-        print("Selecting device")
+                self.devices.append(address)
+                self.device_list_widget.insertItem(self.device_list_widget.count(), ",".join(map(str,address)))
 
     def define_test_duration(self):
         print(self.dtd_widget.text())
@@ -111,9 +112,13 @@ class MainWindow(QMainWindow):
     def start_test(self):
         durstr = self.dtd_widget.text()
         if (not durstr.isdigit()):
-            raise_error(durstr + " is not an integer. Please enter an integer duration in seconds")
+            raise_error("Duration is not an integer. Please enter an integer duration in seconds")
             return
-        print("Starting test, duration=", self.dtd_widget.text())
+        devices_idx = self.device_list_widget.currentRow()
+        if (not devices_idx in range(self.device_list_widget.count())):
+            raise_error("Please select device in list below 'Discover devices'. (You may need to press 'Discover devices' button again.)")
+            return
+        print("Starting test, device=", self.device_list_widget.currentItem().text(), ", duration=", self.dtd_widget.text())
         self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), (MCAST_GROUP, MCAST_PORT))
 
     def stop_test(self):

@@ -124,6 +124,17 @@ int main(int argc, char* argv[]) {
         perror("Error creating device socket");
         return 1;
     }
+    sockaddr_in listenAddr;
+    memset(&listenAddr, 0, sizeof(listenAddr));
+    listenAddr.sin_family = AF_INET;
+    listenAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    listenAddr.sin_port = htons(listenPort);
+    if (bind(dev_sockfd, (struct sockaddr*)&listenAddr, sizeof(listenAddr)) < 0) {
+        perror("Error binding device socket to port.");
+        close(dev_sockfd);
+        return 1;
+    }
+
     int max_fd = std::max(sockfd, dev_sockfd);
     cout << "sockfd=" << sockfd << ", dev_sockfd=" << dev_sockfd << ", max_fd=" << max_fd << ", listenPort=" << listenPort << std::endl;
 
