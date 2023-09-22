@@ -119,11 +119,15 @@ class MainWindow(QMainWindow):
             raise_error("Please select device in list below 'Discover devices'. (You may need to press 'Discover devices' button again.)")
             return
         print("Starting test, device=", self.device_list_widget.currentItem().text(), ", duration=", self.dtd_widget.text())
-        self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), (MCAST_GROUP, MCAST_PORT))
+        self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), self.devices[devices_idx])
 
     def stop_test(self):
         print("Stopping test")
-        self.sock.sendto(bytes("TEST;CMD=STOP;", "utf-8"), (MCAST_GROUP, MCAST_PORT))
+        devices_idx = self.device_list_widget.currentRow()
+        if (not devices_idx in range(len(self.devices))):
+            raise_error("Please select device in list below 'Discover devices'. (You may need to press 'Discover devices' button again.)")
+            return
+        self.sock.sendto(bytes("TEST;CMD=STOP;", "utf-8"), self.devices[devices_idx])
 
     def exit_program(self):
         global PROGRAM_FINISHED

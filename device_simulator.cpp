@@ -166,10 +166,11 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        // Check for multicast messages
         if (FD_ISSET(sockfd, &readfds)) {
             ssize_t receivedBytes = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
             if (receivedBytes < 0) {
-                perror("Error receiving data");
+                perror("Error receiving data on multicast socket.");
                 break;
             }
             
@@ -181,7 +182,22 @@ int main(int argc, char* argv[]) {
                 // Respond to discovery message
                 std::string response = "ID;MODEL=" + std::string(deviceName) + ";SERIAL=" + std::to_string(std::rand()) + ";";
                 sendResponse(response, inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
-            } else if (message.find("TEST;CMD=START;") != std::string::npos) {
+            } else {
+                cout << "Error: unknown message " << message << " received on multicast address." << std::endl;
+            }
+        }
+        if (FD_ISSET(dev_sockfd, &readfds)) {
+            ssize_t receivedBytes = recvfrom(dev_sockfd, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+            if (receivedBytes < 0) {
+                perror("Error receiving data on device comms socket.");
+                break;
+            }
+            
+            buffer[receivedBytes] = '\0';
+            std::string message(buffer);
+            std::cout << "Received message: " << message << std::endl;
+
+            if (message.find("TEST;CMD=START;") != std::string::npos) {
                 // Parse test parameters
                 if (runTest && runTest->isRunning()) {
                     std::cout << "Error: test already running" << std::endl;
@@ -208,6 +224,8 @@ int main(int argc, char* argv[]) {
                     cout << "Error: test already stopped" << std::endl;
                     sendResponse("TEST;RESULT=error;MSG=test already stopped;", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
                 }
+            } else {
+                cout << "Error: unknown message " << message << " received on device comms socket." << std::endl;
             }
             // Other message types (e.g., STOP) can be handled similarly
         }
