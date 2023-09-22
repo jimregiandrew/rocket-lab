@@ -16,6 +16,7 @@ using std::string;
 const char* MULTICAST_ADDRESS = "224.3.11.15";
 const int MULTICAST_PORT = 31115;
 const int RECEIVE_BUFFER_SIZE = 1024;
+const char* STATUS_IDLE = "STATUS;STATE=IDLE;";
 
 // Function to send a UDP message
 void sendResponse(const std::string& response, const char* clientAddress, int clientPort, int sockfd) {
@@ -49,7 +50,7 @@ public:
         std::cout << "elapsedMilliseconds="<<elapsedMilliseconds<<std::endl;
 
         if (elapsedMilliseconds >= duration_ * 1000) {
-            std::string statusMessage = "STATUS;STATE=IDLE;";
+            std::string statusMessage = STATUS_IDLE;
             std::cout << "RunTest: sending " << statusMessage << std::endl;
             sendResponse(statusMessage, inet_ntoa(clientAddr_->sin_addr), ntohs(clientAddr_->sin_port), sockfd_);
             running_ = false;
@@ -169,7 +170,7 @@ int main(int argc, char* argv[]) {
                 // Respond to discovery message
                 std::string response = "ID;MODEL=" + std::string(deviceName) + ";SERIAL=" + std::to_string(std::rand()) + ";";
                 sendResponse(response, inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
-            } else if (message.find("TEST;CMD=START") != std::string::npos) {
+            } else if (message.find("TEST;CMD=START;") != std::string::npos) {
                 // Parse test parameters
                 if (runTest && runTest->isRunning()) {
                     std::cout << "Error: test already running" << std::endl;
@@ -185,6 +186,16 @@ int main(int argc, char* argv[]) {
                     runTest.reset(new RunTest(duration, rate, &clientAddr, dev_sockfd));
                 } else {
                     sendResponse("TEST;RESULT=error;MSG=Invalid parameters;", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
+                }
+            } else if (message.find("TEST;CMD=STOP;") != std::string::npos) {
+                if(runTest && runTest->isRunning()) {
+                    cout << "Stopping test" << std::endl;
+                    runTest.reset();
+                    sendResponse("TEST;RESULT=STOPPED", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
+                    sendResponse(STATUS_IDLE, inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
+                } else {
+                    cout << "Error: test already stopped" << std::endl;
+                    sendResponse("TEST;RESULT=error;MSG=test already stopped;", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), dev_sockfd);
                 }
             }
             // Other message types (e.g., STOP) can be handled similarly

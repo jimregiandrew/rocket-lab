@@ -176,10 +176,20 @@ class MainWindow(QMainWindow):
         # self.threadpool.start(sw)
         self.timer=QTimer()
         self.timer.timeout.connect(self.check_socket)
-        self.timer.start(1000)
+        self.timer.start(100)
+        
+        self.sock = setup_multicast_socket(MCAST_GROUP, MCAST_PORT)
         
     def check_socket(self):
-        pass
+        timeout = 0.01
+        r, _, _ = select.select([self.sock], [], [], timeout)
+        if r:
+            try:
+                data, server = self.sock.recvfrom(1024)
+            except socket.timeout:
+                print("check_socket: timed out, no more responses")
+            else:
+                print("check_socket: received ",data, " from ", server)
 
     def progress_fn(self, n):
         print("%d%% done" % n)
@@ -200,16 +210,15 @@ class MainWindow(QMainWindow):
         print("THREAD COMPLETE!")
 
     def discover_devices(self):
-        MESSAGE = "ID;"
-        print("Sening message:", MESSAGE)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
-        sock.settimeout(0.01) # Can't be 0
-        sock.sendto(bytes(MESSAGE, "utf-8"), (MCAST_GROUP, MCAST_PORT))        # Pass the function to execute
+        message = "ID;"
+        print("Sending message:", message)
+        self.sock.settimeout(0.01) # Can't be 0
+        self.sock.sendto(bytes(message, "utf-8"), (MCAST_GROUP, MCAST_PORT))        # Pass the function to execute
         # Look for responses from all recipients
         while True:
             print("waiting to receive")
             try:
-                data, server = sock.recvfrom(1024)
+                data, server = self.sock.recvfrom(1024)
             except socket.timeout:
                 print("timed out, no more responses")
                 break
@@ -236,23 +245,12 @@ class MainWindow(QMainWindow):
         if (not durstr.isdigit()):
             raise_error(durstr + " is not an integer. Please enter an integer duration in seconds")
             return
-        print("starting test, duration=", self.dtd_widget.text())
-        sock = setup_multicast_socket(MCAST_GROUP, MCAST_PORT)
-        sock.settimeout(3.0)
-        sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), (MCAST_GROUP, MCAST_PORT))
-        # Look for responses from all recipients
-        while True:
-            print("2. waiting to receive")
-            try:
-                data, server = sock.recvfrom(1024)
-            except socket.timeout:
-                print("2. timed out, no more responses")
-                break
-            else:
-                print("2. received ",data, " from ", server)
+        print("Starting test, duration=", self.dtd_widget.text())
+        self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), (MCAST_GROUP, MCAST_PORT))
 
     def stop_test(self):
-        print("Stop test")
+        print("Stopping test")
+        self.sock.sendto(bytes("TEST;CMD=STOP;", "utf-8"), (MCAST_GROUP, MCAST_PORT))
 
     def exit_program(self):
         global program_finished
