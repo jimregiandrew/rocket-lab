@@ -35,7 +35,17 @@ def raise_error(error_str):
     msg.setInformativeText(error_str)
     msg.setWindowTitle("Error")
     msg.exec_()
-
+    
+def parse_key_values(input_str, delim1 = ';', delim2 = '='):
+    
+    out_dict = {}
+    parts = input_str.split(delim1)
+    for part in parts:
+        key_value = part.split('=')
+        if len(key_value) == 2:
+            key, value = key_value
+            out_dict[key] = value
+    return out_dict
 
 class MainWindow(QMainWindow):
 
@@ -90,7 +100,7 @@ class MainWindow(QMainWindow):
         message = "ID;"
         print("Sending message:", message)
         self.sock.settimeout(0.01) # Can't be 0
-        self.sock.sendto(bytes(message, "utf-8"), (MCAST_GROUP, MCAST_PORT))
+        self.sock.sendto(bytes(message, "iso8859-1"), (MCAST_GROUP, MCAST_PORT))
         self.device_list_widget.clear()
         self.devices.clear()
         # Look for responses from all recipients
@@ -103,8 +113,10 @@ class MainWindow(QMainWindow):
                 break
             else:
                 print("received ",data, " from ", address)
-                self.devices.append(address)
-                self.device_list_widget.insertItem(self.device_list_widget.count(), ",".join(map(str,address)))
+                keyvals = parse_key_values(str(data))
+                if ("MODEL" in keyvals):
+                    self.devices.append(address)
+                    self.device_list_widget.insertItem(self.device_list_widget.count(), f'{keyvals["MODEL"]}, port = {address[1]}')
 
     def define_test_duration(self):
         print(self.dtd_widget.text())
@@ -119,7 +131,7 @@ class MainWindow(QMainWindow):
             raise_error("Please select device in list below 'Discover devices'. (You may need to press 'Discover devices' button again.)")
             return
         print("Starting test, device=", self.device_list_widget.currentItem().text(), ", duration=", self.dtd_widget.text())
-        self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "utf-8"), self.devices[devices_idx])
+        self.sock.sendto(bytes("TEST;CMD=START;DURATION=" + durstr + "RATE=1000", "iso8859-1"), self.devices[devices_idx])
 
     def stop_test(self):
         print("Stopping test")
@@ -127,7 +139,7 @@ class MainWindow(QMainWindow):
         if (not devices_idx in range(len(self.devices))):
             raise_error("Please select device in list below 'Discover devices'. (You may need to press 'Discover devices' button again.)")
             return
-        self.sock.sendto(bytes("TEST;CMD=STOP;", "utf-8"), self.devices[devices_idx])
+        self.sock.sendto(bytes("TEST;CMD=STOP;", "iso8859-1"), self.devices[devices_idx])
 
     def exit_program(self):
         global PROGRAM_FINISHED
