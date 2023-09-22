@@ -21,4 +21,8 @@ This makes the device_simulator c++ program, runs pact.py the Python test (contr
 You can run multiple device_simulators (e.g. in other windows) to get more simulated test devices. Change the DeviceName and MulticastPort for each new test device. (Have a look at run.sh).
 
 # Notes
-Not having written socket code before, having written relatively simple python scripts only, and not using PyQt before made this a challenging task for me. But I learned a lot! The pytyhon programs does not do plotting nor define/use pass/fail criteria. I don't think these would be difficult to add but I ran out of time, having spent most of it on the areas that were new to me. I use a single thread event loop for both the python and C++ code. I went down the path of using threads in Python (with slots/signals) but realized that I wouldn't get something going in time. Nonetheless, a single thread is easier to reason about, and  simpler can often be better.
+1. This is very much proof-of-concept code
+2. Comments are woeful. That I should have fixed but time constraints got me.
+3. I use a single thread event loop for both the Python and C++ code. I went down the path of using threads in Python (with slots/signals) but realized that I wouldn't get something going in time. Nonetheless, a single thread is easier to reason about, and  simpler can often be better.
+4. No experience with writing socket code, no experience with PyQt, and having experience with relatively simple python scripts only, made this a challenging task for me. But I did learn a lot! The pytyhon program does not define (or use) pass/fail criteria. I don't think these would be difficult to add but I ran out of time, having spent most of it on the areas that were new to me.
+
